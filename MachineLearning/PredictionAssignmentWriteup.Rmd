@@ -1,0 +1,144 @@
+---
+title: "Prediction Assignment Writeup"
+author: "AGarcia"
+date: "10/27/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Prediction Assignment Writeup
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+
+## Download dataset in a CourseProject folder and read it
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har 
+
+```{r read}
+
+if (!file.exists("CourseProject")) {dir.create("CourseProject")}
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrl, destfile = "./CourseProject/pml-training.csv", method = "curl")
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrl, destfile = "./CourseProject//pml-testing.csv", method = "curl")
+
+# read csv
+pml_training <- read.csv("./CourseProject/pml-training.csv")
+pml_testing <- read.csv("./CourseProject/pml-testing.csv")
+
+# import libraries
+library(caret)
+library(ggplot2)
+library(rattle)
+library(klaR)
+library(randomForest)
+```
+
+## Delete unimportant and NA columns on training and testing data set
+
+Before use the training and testing dataset some fields has been deleted, like NA or DIV/0 as weel as irrelevant fields for the study like the index or user name. 
+
+
+```{r data_cleaning}
+
+dim(pml_training); dim(pml_testing)
+pml_training <- subset(pml_training, select = -c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window , num_window, max_roll_belt, max_picth_belt, max_yaw_belt, min_roll_belt, min_pitch_belt, min_yaw_belt, amplitude_roll_belt, amplitude_pitch_belt, amplitude_yaw_belt, var_total_accel_belt, avg_roll_belt, stddev_roll_belt, var_roll_belt, avg_pitch_belt, stddev_pitch_belt, var_pitch_belt, avg_yaw_belt, stddev_yaw_belt, var_yaw_belt, var_accel_arm, avg_roll_arm, stddev_roll_arm, var_roll_arm, avg_pitch_arm, stddev_pitch_arm, var_pitch_arm, avg_yaw_arm, stddev_yaw_arm, var_yaw_arm, max_roll_arm, max_picth_arm, max_yaw_arm, min_roll_arm, min_pitch_arm, min_yaw_arm, amplitude_roll_arm, amplitude_pitch_arm, amplitude_yaw_arm,max_roll_dumbbell, max_picth_dumbbell, max_yaw_dumbbell, min_roll_dumbbell, min_pitch_dumbbell, min_yaw_dumbbell, amplitude_roll_dumbbell, amplitude_pitch_dumbbell,var_accel_dumbbell, avg_roll_dumbbell, stddev_roll_dumbbell, var_roll_dumbbell, avg_pitch_dumbbell, stddev_pitch_dumbbell, var_pitch_dumbbell, avg_yaw_dumbbell, stddev_yaw_dumbbell, var_yaw_dumbbell,max_roll_forearm, max_picth_forearm, max_yaw_forearm, min_roll_forearm, min_pitch_forearm, min_yaw_forearm, amplitude_roll_forearm, amplitude_pitch_forearm, var_accel_forearm, avg_roll_forearm, stddev_roll_forearm, var_roll_forearm, avg_pitch_forearm, stddev_pitch_forearm, var_pitch_forearm, avg_yaw_forearm, stddev_yaw_forearm, var_yaw_forearm, kurtosis_roll_belt, kurtosis_picth_belt, kurtosis_yaw_belt, skewness_roll_belt, skewness_roll_belt.1, skewness_yaw_belt, kurtosis_roll_arm, kurtosis_picth_arm, kurtosis_yaw_arm, skewness_roll_arm, skewness_pitch_arm, skewness_yaw_arm,kurtosis_roll_dumbbell, kurtosis_picth_dumbbell, kurtosis_yaw_dumbbell, skewness_roll_dumbbell, skewness_pitch_dumbbell, skewness_yaw_dumbbell, kurtosis_roll_forearm, kurtosis_picth_forearm, kurtosis_yaw_forearm, skewness_roll_forearm, skewness_pitch_forearm, skewness_yaw_forearm, amplitude_yaw_forearm,amplitude_yaw_dumbbell ))
+pml_testing <- subset(pml_testing, select = -c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window , num_window, max_roll_belt, max_picth_belt, max_yaw_belt, min_roll_belt, min_pitch_belt, min_yaw_belt, amplitude_roll_belt, amplitude_pitch_belt, amplitude_yaw_belt, var_total_accel_belt, avg_roll_belt, stddev_roll_belt, var_roll_belt, avg_pitch_belt, stddev_pitch_belt, var_pitch_belt, avg_yaw_belt, stddev_yaw_belt, var_yaw_belt, var_accel_arm, avg_roll_arm, stddev_roll_arm, var_roll_arm, avg_pitch_arm, stddev_pitch_arm, var_pitch_arm, avg_yaw_arm, stddev_yaw_arm, var_yaw_arm, max_roll_arm, max_picth_arm, max_yaw_arm, min_roll_arm, min_pitch_arm, min_yaw_arm, amplitude_roll_arm, amplitude_pitch_arm, amplitude_yaw_arm,max_roll_dumbbell, max_picth_dumbbell, max_yaw_dumbbell, min_roll_dumbbell, min_pitch_dumbbell, min_yaw_dumbbell, amplitude_roll_dumbbell, amplitude_pitch_dumbbell,var_accel_dumbbell, avg_roll_dumbbell, stddev_roll_dumbbell, var_roll_dumbbell, avg_pitch_dumbbell, stddev_pitch_dumbbell, var_pitch_dumbbell, avg_yaw_dumbbell, stddev_yaw_dumbbell, var_yaw_dumbbell,max_roll_forearm, max_picth_forearm, max_yaw_forearm, min_roll_forearm, min_pitch_forearm, min_yaw_forearm, amplitude_roll_forearm, amplitude_pitch_forearm, var_accel_forearm, avg_roll_forearm, stddev_roll_forearm, var_roll_forearm, avg_pitch_forearm, stddev_pitch_forearm, var_pitch_forearm, avg_yaw_forearm, stddev_yaw_forearm, var_yaw_forearm, kurtosis_roll_belt, kurtosis_picth_belt, kurtosis_yaw_belt, skewness_roll_belt, skewness_roll_belt.1, skewness_yaw_belt, kurtosis_roll_arm, kurtosis_picth_arm, kurtosis_yaw_arm, skewness_roll_arm, skewness_pitch_arm, skewness_yaw_arm, kurtosis_roll_dumbbell, kurtosis_picth_dumbbell, kurtosis_yaw_dumbbell, skewness_roll_dumbbell, skewness_pitch_dumbbell, skewness_yaw_dumbbell, kurtosis_roll_forearm, kurtosis_picth_forearm, kurtosis_yaw_forearm, skewness_roll_forearm, skewness_pitch_forearm, skewness_yaw_forearm, amplitude_yaw_forearm,amplitude_yaw_dumbbell ))
+dim(pml_training); dim(pml_testing)
+
+```
+
+## Create data partition
+
+Using the training data partition has been done using 70% data for training and 30% for testing.
+
+```{r data_partition}
+
+inTrain <- createDataPartition(y=pml_training$classe,
+                               p=0.7, list=FALSE)
+training <- pml_training[inTrain,]
+testing <- pml_training[-inTrain,]
+dim(training); dim(testing)
+```
+
+## Predicting with trees
+
+First approximation has been done using the method rpart, reason for this is because is easy to interpret and get a first basic idea to understand an interpretate the model.
+
+```{r method_rpart}
+
+set.seed(32343)
+modFitRPART <- train(classe ~., data=training, method="rpart")
+modFitRPART
+
+## fancy plot
+fancyRpartPlot(modFitRPART$finalModel)
+
+# predict new values
+predRPART <- predict(modFitRPART,newdata=testing)
+cmRPART <- confusionMatrix(predRPART, testing$classe)$overall[1]
+cmRPART
+```
+
+Using Predicting with trees, the acuracy if very small.
+
+## Random Forest
+Second method used is Ramdom Forest, as positive aspect is that normaly get a very good accuracy but nevertheless is a very slow method due the construction of multitude decision trees.
+
+```{r method_rf}
+#modFitRF <- train(classe~ .,data=training,method="rf",prox=TRUE)
+modFitRF <- randomForest(classe~ .,data=training,type = "class")
+print(modFitRF)
+predRF <- predict(modFitRF,newdata=testing)
+cmRF <- confusionMatrix(predRF, testing$classe)$overall[1]
+table(predRF,testing$classe)
+cmRF
+```
+
+Using Random Forest, accuracy is very hight especially for Class A and Class E.
+
+## Boosting
+Next method used is Boosting
+
+```{r method_gbm}
+modFitGBM <- train(classe ~ ., method="gbm",data=training,verbose=FALSE)
+print(modFitGBM)
+predGBM <- predict(modFitGBM,testing)
+cmRF <- confusionMatrix(predGBM, testing$classe)$overall[1]
+table(predGBM,testing$classe)
+cmRF
+```
+Accuracy for Boosting is hight, but it does not surpass the accuray acquire with Random Forest.
+
+## Model based prediction
+
+Las tecnique used is a Model based prediction
+
+```{r based_prediction}
+##Build predictions
+modLDA = train(classe ~ .,data=training,method="lda")
+modNB = train(classe ~ ., data=training,method="nb")
+predLDA = predict(modLDA,testing)
+predNB = predict(modNB,testing)
+table(predLDA,predNB)
+```
+
+Using Model based prediction the accuracy is worst than using Random Forest and Boosting.
+
+# Conclusion
+
+Best method is Random Forest.
+
+```{r conclusion}
+pml_testing <- subset(pml_testing, select = -c(problem_id))
+final_pred <- predict(modFitRF, pml_testing, type = "class")
+final_pred
+```
+
